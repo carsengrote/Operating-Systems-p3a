@@ -11,14 +11,22 @@
 int currWriter = 0;
 int availableThreads = 4;
 
+struct thread_args{ 
+    
+    char* file;
+    int start;
+    int size;
+    int order;
+};
 
-int zipWorker(char* file, int start, int size, int order){
+void * zipWorker(void* inputArgs){
 
-
+    struct thread_args *args = (struct thread_args*) inputArgs;
     // function here yo 
     // Russ if you're reading this I'm a bit intoxicated
     
 
+    free(args);
     availableThreads++;
     return 0;
 }
@@ -60,7 +68,6 @@ int main(int argc, char* argv[]){
         // how many threads I want per file
 
         int sectionSize = (size / threadsPerFile);
-        char* currThreadAddr = mappedFile; 
         pthread_t threads[threadsPerFile];       
         
         // for loop for the number of threads per file
@@ -72,8 +79,15 @@ int main(int argc, char* argv[]){
 
              int startAddr = (sectionSize * currThread);
              
+             struct thread_args *args = malloc(sizeof(struct thread_args));
+             args->file = mappedFile;
+             args->start = startAddr;
+             args->size = sectionSize;
+             args->order = totalThreads; 
+             
              availableThreads--;
-             pthread_create(&threads[currThread], NULL, zipWorker, mappedFile, startAddr, size, totalThreads);
+             pthread_create(&threads[currThread], NULL, zipWorker, &args);
+             
              totalThreads++;
 
         }
