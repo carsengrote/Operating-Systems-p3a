@@ -12,8 +12,11 @@ int currWriter = 0;
 int availableThreads = 4;
 
 
-int zipWorker(char *start, char* end, int order){
+int zipWorker(char* file, int start, int size, int order){
 
+
+    // function here yo 
+    // Russ if you're reading this I'm a bit intoxicated
     
 
     availableThreads++;
@@ -22,8 +25,9 @@ int zipWorker(char *start, char* end, int order){
 
 int main(int argc, char* argv[]){
 
-    printf("%d %d\n", get_nprocs(), get_nprocs_conf());
-    
+    // decides how many threads to have work on each file
+    // if there's less than 5 files then 2 threads per file
+    // if theres 5 or more then just one thread per file
     int threadsPerFile;
 
     if (argc >= 5){
@@ -34,30 +38,43 @@ int main(int argc, char* argv[]){
         
         threadsPerFile = 2;
     }
-   
+    
+    // represents the total amount of threads that have been created
+    int totalThreads = 0;
 
+    // for loop for each file given as an arguemnt
     for(int fileNo = 1; fileNo < argc; fileNo++){
     
         int currFile = open(argv[fileNo], O_RDONLY);
         
+        // gets size of the file
         struct stat st;
         fstat(currFile, &st);
         int size = st.st_size;
 
+        // maps the whole file to memory
         char* mappedFile = mmap(0, size, PROT_READ, MAP_PRIVATE, currFile, 0);
 
 
         // Need to calculate starting / ending address for each thread based off of file size and
         // how many threads I want per file
 
+        int sectionSize = (size / threadsPerFile);
+        char* currThreadAddr = mappedFile; 
+        pthread_t threads[threadsPerFile];       
+        
+        // for loop for the number of threads per file
         for (int currThread = 0; currThread < threadsPerFile; currThread++){
              
-             // put semaphore here 
+             // wait til we can get a new thread - only have 4 total
              while(availableThreads < 1)
                 ;
 
+             int startAddr = (sectionSize * currThread);
              
-             
+             availableThreads--;
+             pthread_create(&threads[currThread], NULL, zipWorker, mappedFile, startAddr, size, totalThreads);
+             totalThreads++;
 
         }
 
