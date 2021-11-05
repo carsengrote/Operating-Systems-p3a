@@ -17,6 +17,7 @@ int availableThreads[3];
 int lastThreadCount;
 char lastThreadChar;
 int totalThreads;
+int mode; 
 
 struct thread_args{ 
     
@@ -33,12 +34,26 @@ void * zipWorker(void* inputArgs){
     char* fileName = args->fileName;
 
     int file = open(fileName, O_RDONLY);
+
+    if (file < 0){
+        free(args->fileName);
+        free(args);
+        while(currentWriter != myTurn){
+            sched_yield();
+        }
+        lastThreadCount = 0;
+        currentWriter++;
+        availableThreads[arrayIndex] = 0;
+        sem_post(&sem);
+        return 0;
+    }
         
     // gets size of the file
     //overflowing stack?
     struct stat st;
     fstat(file, &st);
     int size = st.st_size;
+    //printf("\nsize: %d\n", size);
 
     char* mappedFile = mmap(0, size, PROT_READ, MAP_PRIVATE, file, 0);
 
@@ -52,33 +67,37 @@ void * zipWorker(void* inputArgs){
     int index = 0;
     while(index < (size - 1)){
 
+        // if current char is same as next
         if(mappedFile[index + 1] == currentChar){
             currentCount++;
             charOutput[outputIndex] = currentChar;
             intOutput[outputIndex] = currentCount;
+            // if second to last char have to increment index
             if (index  == (size - 2)){
                 outputIndex++;
             }
 
         } else{
+
             charOutput[outputIndex] = currentChar;
             intOutput[outputIndex] = currentCount;
             currentCount = 1; 
             outputIndex++;
+
             if (index == (size - 2)){
                 charOutput[outputIndex] = mappedFile[index + 1];
                 intOutput[outputIndex] = 1;
                 outputIndex++;
             }
         }
-
+    
         currentChar = mappedFile[index + 1];
         index++;
     }
-
     charOutput[outputIndex] = '\0';
 
-    int writeLength = strlen(charOutput);
+    //int writeLength = strlen(charOutput);
+    int writeLength = outputIndex; 
 
     int currentWrite = 0;
 
@@ -86,24 +105,40 @@ void * zipWorker(void* inputArgs){
         sched_yield();
     }
 
-    if ((myTurn > 0) && (lastThreadChar == charOutput[0])){
+    if ((myTurn > 0) && (lastThreadChar == charOutput[0]) && (lastThreadCount != 0)){
         intOutput[0] = intOutput[0] + lastThreadCount;
-    } else if (myTurn > 0){
-       fwrite(&(lastThreadCount), 4, 1, stdout);
-       fwrite(&(lastThreadChar), 1, 1, stdout); 
+    } else if (myTurn > 0 && (lastThreadCount != 0)){
+
+        if(mode == 0){
+            printf("%d", lastThreadCount);
+            printf("%c\n", lastThreadChar);
+        }else {
+            fwrite(&(lastThreadCount), 4, 1, stdout);
+            fwrite(&(lastThreadChar), 1, 1, stdout); 
+        }
     }
 
     while(currentWrite < (writeLength - 1)){
-        fwrite(&(intOutput[currentWrite]), 4, 1, stdout);
-        fwrite(&(charOutput[currentWrite]), 1, 1, stdout);
+        if (mode == 0){
+            printf("%d", intOutput[currentWrite]);
+            printf("%c\n", charOutput[currentWrite]);
+        } else {
+            fwrite(&(intOutput[currentWrite]), 4, 1, stdout);
+            fwrite(&(charOutput[currentWrite]), 1, 1, stdout);
+        }
         currentWrite++;
     }
 
     // if it's the last thread in the whole program - write the last char + int to output,
     // if it's not the last thread, save the last char and count for next thread
     if (myTurn == totalThreads){
-        fwrite(&(intOutput[currentWrite]), 4, 1, stdout);
-        fwrite(&(charOutput[currentWrite]), 1, 1, stdout);
+        if (mode == 0){
+            printf("%d", intOutput[currentWrite]);
+            printf("%c\n", charOutput[currentWrite]);
+        } else{
+            fwrite(&(intOutput[currentWrite]), 4, 1, stdout);
+            fwrite(&(charOutput[currentWrite]), 1, 1, stdout);
+        }
     } else{
         lastThreadChar = charOutput[currentWrite];
         lastThreadCount = intOutput[currentWrite];
@@ -123,17 +158,19 @@ void * zipWorker(void* inputArgs){
 
 int main(int argc, char* argv[]){
 
+    mode = 1;
+
     int numFiles = argc - 1;
 
     if (numFiles == 0){
         printf("pzip: file1 [file2 ...]\n");
-        exit(0);
+        exit(1);
     }
-    totalThreads = numFiles -1;
+    totalThreads = numFiles - 1;
 
     pthread_t threads[3];
 
-   sem_init(&sem, 0, 3);
+    sem_init(&sem, 0, 3);
 
     int currentThreadNumber = 0;
 
