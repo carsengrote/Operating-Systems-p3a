@@ -48,17 +48,28 @@ void * zipWorker(void* inputArgs){
 
     int currentCount = 1;
     char currentChar = mappedFile[0];
+    
     int index = 0;
-
     while(index < (size - 1)){
 
         if(mappedFile[index + 1] == currentChar){
-            currentCount++;      
+            currentCount++;
+            charOutput[outputIndex] = currentChar;
+            intOutput[outputIndex] = currentCount;
+            if (index  == (size - 2)){
+                outputIndex++;
+            }
+
         } else{
             charOutput[outputIndex] = currentChar;
             intOutput[outputIndex] = currentCount;
             currentCount = 1; 
             outputIndex++;
+            if (index == (size - 2)){
+                charOutput[outputIndex] = mappedFile[index + 1];
+                intOutput[outputIndex] = 1;
+                outputIndex++;
+            }
         }
 
         currentChar = mappedFile[index + 1];
@@ -68,26 +79,21 @@ void * zipWorker(void* inputArgs){
     charOutput[outputIndex] = '\0';
 
     int writeLength = strlen(charOutput);
+
     int currentWrite = 0;
 
     while(currentWriter != myTurn){
         sched_yield();
-    }        
-    
+    }
+
+    if ((myTurn > 0) && (lastThreadChar == charOutput[0])){
+        intOutput[0] = intOutput[0] + lastThreadCount;
+    } else if (myTurn > 0){
+       fwrite(&(lastThreadCount), 4, 1, stdout);
+       fwrite(&(lastThreadChar), 1, 1, stdout); 
+    }
+
     while(currentWrite < (writeLength - 1)){
-
-        // check to see if previous threads last char matches this threads
-        // first char
-        if (currentWrite == 0 && myTurn > 0){
-            
-            if (lastThreadChar == charOutput[0]){  
-                intOutput[0] = intOutput[0] + lastThreadCount;
-            } else{
-                fwrite(&(lastThreadCount), 4, 1, stdout);
-                fwrite(&(lastThreadChar), 1, 1, stdout);
-            }
-        }
-
         fwrite(&(intOutput[currentWrite]), 4, 1, stdout);
         fwrite(&(charOutput[currentWrite]), 1, 1, stdout);
         currentWrite++;
@@ -98,7 +104,6 @@ void * zipWorker(void* inputArgs){
     if (myTurn == totalThreads){
         fwrite(&(intOutput[currentWrite]), 4, 1, stdout);
         fwrite(&(charOutput[currentWrite]), 1, 1, stdout);
-    
     } else{
         lastThreadChar = charOutput[currentWrite];
         lastThreadCount = intOutput[currentWrite];
@@ -121,6 +126,7 @@ int main(int argc, char* argv[]){
     int numFiles = argc - 1;
 
     if (numFiles == 0){
+        printf("pzip: file1 [file2 ...]\n");
         exit(0);
     }
     totalThreads = numFiles -1;
@@ -135,7 +141,6 @@ int main(int argc, char* argv[]){
 
     for(int fileNo = 0; fileNo < numFiles; fileNo++){
 
-
         sem_wait(&sem);
 
         // finding availible thread index
@@ -143,7 +148,6 @@ int main(int argc, char* argv[]){
         while (availableThreads[threadIndex] == 1){
             threadIndex++;
         }
-        //printf("next thread index: %d\n", threadIndex);
 
         // mallocing and setting arguments for thread
         struct thread_args *args = malloc(sizeof(struct thread_args));
