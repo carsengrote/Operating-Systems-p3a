@@ -18,9 +18,10 @@ int lastThreadCount;
 char lastThreadChar;
 int totalThreads;
 int mode; 
+int badFirst;
 
 struct thread_args{ 
-    
+    //add size
     char* fileName;
     int myTurn;
     int arrayIndex;
@@ -36,12 +37,15 @@ void * zipWorker(void* inputArgs){
     int file = open(fileName, O_RDONLY);
 
     if (file < 0){
+        if(myTurn == 0) {
+            badFirst = 1;
+        }
         free(args->fileName);
         free(args);
         while(currentWriter != myTurn){
             sched_yield();
         }
-        lastThreadCount = 0;
+        //lastThreadCount = 0;
         currentWriter++;
         availableThreads[arrayIndex] = 0;
         sem_post(&sem);
@@ -62,10 +66,20 @@ void * zipWorker(void* inputArgs){
     int outputIndex  = 0;
 
     int currentCount = 1;
-    char currentChar = mappedFile[0];
     
     int index = 0;
+    while(mappedFile[index] == '\0') {
+        index++;
+    }
+    char currentChar = mappedFile[index];
+
     while(index < (size - 1)){
+
+        //ignore null characters
+        if(mappedFile[index+1] == '\0') {
+            index++;
+            continue;
+        }
 
         // if current char is same as next
         if(mappedFile[index + 1] == currentChar){
@@ -113,8 +127,14 @@ void * zipWorker(void* inputArgs){
             printf("%d", lastThreadCount);
             printf("%c\n", lastThreadChar);
         }else {
-            fwrite(&(lastThreadCount), 4, 1, stdout);
-            fwrite(&(lastThreadChar), 1, 1, stdout); 
+            // check to make sure lastThreadCount is NULL
+            if(badFirst != 1 || myTurn != 1) {
+                fwrite(&(lastThreadCount), 4, 1, stdout);
+                fwrite(&(lastThreadChar), 1, 1, stdout); 
+            }
+            //else {
+            //    printf("bad file %s\n", fileName);
+            //}
         }
     }
 
@@ -159,6 +179,7 @@ void * zipWorker(void* inputArgs){
 int main(int argc, char* argv[]){
 
     mode = 1;
+    badFirst = 0;
 
     int numFiles = argc - 1;
 
@@ -185,7 +206,9 @@ int main(int argc, char* argv[]){
         while (availableThreads[threadIndex] == 1){
             threadIndex++;
         }
-
+        // get size and find out if we need to multithread a single file
+        //change struct to include size (one more than max index)
+        // mem map file befroe threading
         // mallocing and setting arguments for thread
         struct thread_args *args = malloc(sizeof(struct thread_args));
         args->fileName = strdup(argv[fileNo + 1]);
@@ -211,3 +234,4 @@ int main(int argc, char* argv[]){
 
     return 0;
 }
+
