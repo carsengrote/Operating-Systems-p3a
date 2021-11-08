@@ -174,20 +174,16 @@ int main(int argc, char* argv[]){
 
             if (fileNo == numFiles - 1){
 
-                if (availableThreads[0] == 1){
-                    pthread_join(threads[0], NULL);
+                for(int i = 0; i < maxThreads; i++){
+                    if (availableThreads[i] == 1){
+                        pthread_join(threads[i], NULL);
+                    }
                 }
-                if (availableThreads[1] == 1){
-                    pthread_join(threads[1], NULL);
-                }
-                if (availableThreads[2] == 1){
-                    pthread_join(threads[2], NULL);
-                }
+
                 if (lastThreadCount != -1){
                     fwrite(&(lastThreadCount), 4, 1, stdout);
                     fwrite(&(lastThreadChar), 1, 1, stdout); 
                 }
-
                 return 0;
             }
             continue;
@@ -255,15 +251,12 @@ int main(int argc, char* argv[]){
         close(file);
     }
 
-    if (availableThreads[0] == 1){
-        pthread_join(threads[0], NULL);
-    }
-    if (availableThreads[1] == 1){
-        pthread_join(threads[1], NULL);
-    }
-    if (availableThreads[2] == 1){
-        pthread_join(threads[2], NULL);
+    for(int i = 0; i < maxThreads; i++){
+        if (availableThreads[i] == 1){
+            pthread_join(threads[i], NULL);
+        }
     }
 
     return 0;
 }
+
